@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: talentverse
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: DATABASE_PATH
+        value: /tmp/talentverse.db

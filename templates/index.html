@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>TalentVerse — Skills &amp; Career Intelligence</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="/" aria-label="TalentVerse home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TalentVerse</span>
+      </a>
+      <nav class="topnav" aria-label="Sections">
+        <a href="#intake">Intake</a>
+        <a href="#tools">Career tools</a>
+        <a href="#saved">Saved profiles</a>
+      </nav>
+      <span id="aiStatus" class="pill" title="Checking AI configuration…"><span class="dot"></span><span id="aiStatusText">Checking…</span></span>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <section class="intro">
+      <h1>Skills &amp; career intelligence</h1>
+      <p>Turn a resume or spoken introduction into a structured profile, then use it to map skill gaps, compare against job descriptions, plan portfolio projects and learn from interview practice.</p>
+    </section>
+
+    <section id="intake" class="workspace" aria-label="Profile intake">
+      <div class="card input-panel">
+        <header class="card-head">
+          <div><span class="step">1</span><h2>Intake</h2></div>
+          <span class="meta">Text or audio</span>
+        </header>
+        <p class="hint">Avoid submitting information you do not want processed by an external AI service.</p>
+
+        <label for="resumeText" class="label">Resume text</label>
+        <textarea id="resumeText" maxlength="30000" spellcheck="false" placeholder="Paste your resume: summary, skills, education, projects, experience, certifications."></textarea>
+        <div class="textarea-meta"><span id="charCount">0 / 30,000 characters</span><span>Minimum 80</span></div>
+        <div class="action-row">
+          <button id="sampleBtn" class="btn btn-secondary" type="button">Load sample</button>
+          <button id="extractBtn" class="btn btn-primary" type="button"><span>Extract profile</span></button>
+        </div>
+
+        <div class="divider"><span>or</span></div>
+
+        <label for="audioFile" class="label">Audio introduction <span class="label-note">MP3, WAV, M4A · max 8 MB</span></label>
+        <div class="action-row">
+          <input id="audioFile" type="file" accept="audio/*">
+          <button id="audioBtn" class="btn btn-secondary" type="button">Extract from audio</button>
+        </div>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="card results-panel">
+        <header class="card-head">
+          <div><span class="step">2</span><h2>Structured profile</h2></div>
+          <span id="saveBadge" class="badge">Awaiting input</span>
+        </header>
+        <div id="emptyState" class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+          <h3>No profile yet</h3>
+          <p>Extract a resume or audio introduction to see validated fields and a confirmation that the profile was saved.</p>
+          <ol class="flow"><li>Input</li><li>AI + schema</li><li>Validation</li><li>SQLite</li></ol>
+        </div>
+        <div id="profileResult" class="profile-result hidden"></div>
+      </div>
+    </section>
+
+    <section id="tools" class="card section-card" aria-label="Career tools">
+      <header class="card-head">
+        <div><span class="step">3</span><h2>Career tools</h2></div>
+        <span id="activeProfile" class="badge">No profile selected</span>
+      </header>
+      <p class="hint">Select a saved profile (use “View profile” below) or extract a new one, then choose a tool.</p>
+      <div class="tabs" role="tablist" aria-label="Career tools">
+        <button class="tab active" role="tab" aria-selected="true" data-kind="skill-gap" type="button">Skill gap &amp; plan</button>
+        <button class="tab" role="tab" aria-selected="false" data-kind="job-match" type="button">Job match</button>
+        <button class="tab" role="tab" aria-selected="false" data-kind="portfolio-brief" type="button">Portfolio brief</button>
+        <button class="tab" role="tab" aria-selected="false" data-kind="interview-feedback" type="button">Interview feedback</button>
+      </div>
+      <div class="tool-grid" role="tabpanel">
+        <div>
+          <label id="toolLabel" for="toolInput" class="label"></label>
+          <textarea id="toolInput" class="tool-input" maxlength="15000" spellcheck="false"></textarea>
+          <div class="action-row">
+            <button id="toolBtn" class="btn btn-primary" type="button"><span>Generate</span></button>
+          </div>
+          <div id="toolStatus" class="status" role="status" aria-live="polite"></div>
+        </div>
+        <div id="toolResult" class="profile-result tool-result" aria-live="polite"><p class="hint">Results appear here and are saved to the database.</p></div>
+      </div>
+    </section>
+
+    <section id="saved" class="card section-card" aria-label="Saved profiles">
+      <header class="card-head">
+        <div><span class="step">4</span><h2>Saved profiles</h2></div>
+        <button id="refreshBtn" class="btn btn-ghost" type="button">Refresh</button>
+      </header>
+      <p class="hint">Loaded from the database, not kept in the browser.</p>
+      <div id="savedProfiles" class="saved-profiles"><div class="loading-line">Loading saved profiles…</div></div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-brand">TalentVerse</span>
+      <span>CA3 · Generative AI Foundations</span>
+      <span>AI-assisted extraction · human review recommended</span>
+    </footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
