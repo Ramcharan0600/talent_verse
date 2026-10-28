@@ -186,3 +186,25 @@ input[type=file]::file-selector-button { font: 500 13px var(--font); margin-righ
   html { scroll-behavior: auto; }
   * { transition: none !important; animation-duration: .01ms !important; }
 }
+
+/* Preview + confirmation ------------------------------------------------- */
+.preview-banner { background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+.validation-panel { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px; background: var(--surface-2); }
+.validation-summary { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.validation-summary.ok { color: var(--success); }
+.validation-summary.warn { color: var(--warn); }
+.validation-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--text-2); }
+.check { display: flex; gap: 8px; }
+.check-icon { width: 16px; flex: none; font-weight: 700; text-align: center; }
+.check.ok .check-icon { color: var(--success); }
+.check.warning .check-icon { color: var(--warn); }
+.check.missing .check-icon { color: var(--text-3); }
+.edit-form { display: grid; gap: 12px; margin-bottom: 14px; }
+.edit-field { display: block; }
+.edit-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.edit-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.profile-top .btn { margin-top: 10px; }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: var(--on-accent); }
+.saved-card .btn-danger { margin-left: 8px; }
+.profile-top .btn-danger { margin-left: 8px; }

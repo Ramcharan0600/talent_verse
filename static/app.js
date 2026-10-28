@@ -67,7 +67,22 @@ function renderProfile(profile) {
   const top = makeElement("div", "profile-top");
   top.appendChild(makeElement("h3", "", safeText(profile.full_name)));
   top.appendChild(makeElement("div", "contact-line", [profile.email, profile.phone].filter(Boolean).join(" · ") || "No contact details found"));
-  top.appendChild(makeElement("div", "saved-confirm", `✓ Saved to database · Profile #${profile.id}`));
+  const when = profile.updated_at ? `Updated ${new Date(profile.updated_at).toLocaleString()}` : `Saved ${new Date(profile.created_at).toLocaleString()}`;
+  top.appendChild(makeElement("div", "saved-confirm", `✓ ${profile.updated_at ? "Updated in" : "Saved to"} database · Profile #${profile.id} · ${when}`));
+  const editBtn = makeElement("button", "btn btn-secondary", "Edit profile");
+  editBtn.type = "button";
+  editBtn.addEventListener("click", async () => {
+    try {
+      const response = await fetch(`/api/profiles/${profile.id}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not load the profile.");
+      renderPreview(data.profile, data.validation, "text", profile.id);
+    } catch (error) {
+      showStatus(error.message, "error");
+    }
+  });
+  top.appendChild(editBtn);
+  top.appendChild(deleteButton(profile));
   profileResult.appendChild(top);
 
   addSection(profileResult, "Professional summary", makeElement("p", "", profile.professional_summary));
@@ -132,7 +147,20 @@ function renderProfile(profile) {
   setActiveProfile(profile);
 }
 
-async function createProfile() {
+async function requestJson(url, options) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch {
+    throw new Error("Could not reach the server. Check your connection and try again.");
+  }
+  let data = {};
+  try { data = await response.json(); } catch { /* non-JSON error page */ }
+  if (!response.ok) throw new Error(data.error || `The request failed (${response.status}).`);
+  return data;
+}
+
+async function previewProfile() {
   const text = resumeText.value.trim();
   if (text.length < 80) {
     showStatus("Please paste at least 80 characters of resume text before extracting.", "error");
@@ -141,18 +169,15 @@ async function createProfile() {
   extractBtn.disabled = true;
   extractBtn.classList.add("loading");
   extractBtn.querySelector("span").textContent = "Extracting";
-  showStatus("Sending resume to the AI, validating the structured result, and saving it…", "");
+  showStatus("Sending resume to the AI and validating the structured result…", "");
   try {
-    const response = await fetch("/api/profiles", {
+    const data = await requestJson("/api/profiles/extract", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({resume_text: text})
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "The request failed.");
-    renderProfile(result.profile);
-    showStatus(result.message, "success");
-    await loadSavedProfiles();
+    renderPreview(data.preview, data.validation, data.source, null);
+    showStatus(data.message, "success");
   } catch (error) {
     showStatus(error.message || "Something went wrong. Please try again.", "error");
   } finally {
@@ -160,6 +185,147 @@ async function createProfile() {
     extractBtn.classList.remove("loading");
     extractBtn.querySelector("span").textContent = "Extract profile";
   }
+}
+
+// ---------------------------------------------------------------- preview + confirmation
+const STATUS_ICON = {ok: "✓", warning: "!", missing: "–"};
+
+function validationPanel(validation) {
+  const panel = makeElement("div", "validation-panel");
+  const summary = validation.warnings
+    ? `Schema valid · ${validation.warnings} item(s) need your review`
+    : "Schema valid · no warnings";
+  panel.appendChild(makeElement("div", `validation-summary ${validation.warnings ? "warn" : "ok"}`, summary));
+  const list = makeElement("ul", "validation-list");
+  validation.checks.forEach(check => {
+    const li = makeElement("li", `check ${check.status}`);
+    li.appendChild(makeElement("span", "check-icon", STATUS_ICON[check.status] || "•"));
+    li.appendChild(makeElement("span", "", check.message));
+    list.appendChild(li);
+  });
+  panel.appendChild(list);
+  return panel;
+}
+
+function editableField(id, label, value, type) {
+  const wrap = makeElement("label", "edit-field");
+  wrap.appendChild(makeElement("span", "label", label));
+  const input = makeElement(type === "textarea" ? "textarea" : "input", "edit-input");
+  if (type !== "textarea") input.type = type;
+  input.id = id;
+  input.value = value || "";
+  if (type === "textarea") input.rows = 4;
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function readOnlySummary(title, lines) {
+  const node = makeElement("div");
+  if (!lines.length) node.appendChild(makeElement("p", "", "None found."));
+  lines.forEach(line => node.appendChild(makeElement("small", "", line)));
+  addSection(profileResult, title, node);
+}
+
+// Shows extracted data for review. Nothing is saved until the user confirms. editingId != null means UPDATE.
+function renderPreview(profile, validation, source, editingId) {
+  emptyState.classList.add("hidden");
+  profileResult.classList.remove("hidden");
+  profileResult.replaceChildren();
+
+  const updating = editingId !== null;
+  profileResult.appendChild(makeElement("div", "preview-banner",
+    updating ? `Editing saved profile #${editingId}. Changes are written only after you confirm.`
+             : "Preview only — this profile is NOT saved yet. Review and correct it, then confirm."));
+  profileResult.appendChild(validationPanel(validation));
+
+  const form = makeElement("div", "edit-form");
+  form.appendChild(editableField("editName", "Full name", profile.full_name, "text"));
+  form.appendChild(editableField("editEmail", "Email", profile.email, "email"));
+  form.appendChild(editableField("editPhone", "Phone", profile.phone, "text"));
+  form.appendChild(editableField("editSummary", "Professional summary", profile.professional_summary, "textarea"));
+  form.appendChild(editableField("editSkills", "Skills (comma-separated)", profile.skills.join(", "), "textarea"));
+  profileResult.appendChild(form);
+
+  readOnlySummary("Education", profile.education.map(e => [e.qualification, e.institution, e.dates].filter(Boolean).join(" · ")));
+  readOnlySummary("Experience", profile.experience.map(e => [e.role, e.organization, e.dates].filter(Boolean).join(" · ")));
+  readOnlySummary("Projects", profile.projects.map(p => p.name));
+  readOnlySummary("Certifications", profile.certifications);
+
+  const formError = makeElement("div", "status", "");
+  formError.setAttribute("role", "alert");
+  const actions = makeElement("div", "action-row");
+  const discard = makeElement("button", "btn btn-secondary", "Discard");
+  discard.type = "button";
+  const confirm = makeElement("button", "btn btn-primary", updating ? "Confirm & update database" : "Confirm & save to database");
+  confirm.type = "button";
+  actions.append(discard, confirm);
+  profileResult.append(actions, formError);
+
+  saveBadge.textContent = updating ? "Editing · not yet updated" : "Preview · not saved";
+  saveBadge.classList.remove("saved");
+
+  discard.addEventListener("click", () => {
+    profileResult.classList.add("hidden");
+    emptyState.classList.remove("hidden");
+    saveBadge.textContent = "Awaiting input";
+    showStatus("Preview discarded. Nothing was saved.", "");
+  });
+
+  confirm.addEventListener("click", async () => {
+    const edited = {
+      ...profile,
+      full_name: document.getElementById("editName").value.trim() || null,
+      email: document.getElementById("editEmail").value.trim() || null,
+      phone: document.getElementById("editPhone").value.trim() || null,
+      professional_summary: document.getElementById("editSummary").value.trim(),
+      skills: document.getElementById("editSkills").value.split(",").map(x => x.trim()).filter(Boolean),
+    };
+    confirm.disabled = true;
+    formError.className = "status";
+    formError.textContent = updating ? "Updating…" : "Saving…";
+    try {
+      const data = await requestJson(updating ? `/api/profiles/${editingId}` : "/api/profiles", {
+        method: updating ? "PUT" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({profile: edited, source, confirmed: true})
+      });
+      renderProfile(data.profile);
+      showStatus(data.message, "success");
+      await loadSavedProfiles();
+    } catch (error) {
+      formError.className = "status error";
+      formError.textContent = error.message;
+      confirm.disabled = false;
+    }
+  });
+}
+
+function deleteButton(profile) {
+  const button = makeElement("button", "btn btn-danger", "Delete");
+  button.type = "button";
+  button.addEventListener("click", async () => {
+    const label = `#${profile.id}${profile.full_name ? ` (${profile.full_name})` : ""}`;
+    if (!window.confirm(`Permanently delete profile ${label} and all analyses saved for it? This cannot be undone.`)) return;
+    button.disabled = true;
+    try {
+      const data = await requestJson(`/api/profiles/${profile.id}?confirmed=true`, {method: "DELETE"});
+      if (activeProfileId === profile.id) {
+        activeProfileId = null;
+        activeProfileLabel.textContent = "No profile selected";
+        profileResult.classList.add("hidden");
+        emptyState.classList.remove("hidden");
+        saveBadge.textContent = "Awaiting input";
+        saveBadge.classList.remove("saved");
+        toolResult.replaceChildren();
+      }
+      showStatus(data.message, "success");
+      await loadSavedProfiles();
+    } catch (error) {
+      showStatus(error.message, "error");
+      button.disabled = false;
+    }
+  });
+  return button;
 }
 
 async function loadSavedProfiles() {
@@ -178,15 +344,21 @@ async function loadSavedProfiles() {
       card.classList.toggle("selected", profile.id === activeProfileId);
       card.appendChild(makeElement("h3", "", safeText(profile.full_name)));
       card.appendChild(makeElement("p", "", `${profile.skills.length} skills · ${profile.projects.length} projects`));
+      card.appendChild(makeElement("p", "", [profile.email, profile.phone].filter(Boolean).join(" · ")));
       card.appendChild(makeElement("p", "", new Date(profile.created_at).toLocaleString()));
       const button = makeElement("button", "", "View profile");
       button.type = "button";
-      button.addEventListener("click", () => {
-        renderProfile(profile);
+      button.addEventListener("click", async () => {
+        try {
+          renderProfile((await requestJson(`/api/profiles/${profile.id}`)).profile);
+        } catch (error) {
+          showStatus(error.message, "error");
+          return;
+        }
         document.querySelectorAll(".saved-card").forEach(c => c.classList.toggle("selected", c === card));
         document.querySelector(".results-panel").scrollIntoView({behavior: "smooth", block: "start"});
       });
-      card.appendChild(button);
+      card.append(button, deleteButton(profile));
       savedProfiles.appendChild(card);
     });
   } catch (error) {
@@ -194,7 +366,7 @@ async function loadSavedProfiles() {
   }
 }
 
-extractBtn.addEventListener("click", createProfile);
+extractBtn.addEventListener("click", previewProfile);
 document.getElementById("refreshBtn").addEventListener("click", loadSavedProfiles);
 loadSavedProfiles();
 
@@ -207,16 +379,13 @@ audioBtn.addEventListener("click", async () => {
   if (!file) { showStatus("Choose an audio file first.", "error"); return; }
   if (file.size > 8 * 1024 * 1024) { showStatus("Audio file is too large. Keep it under 8 MB.", "error"); return; }
   audioBtn.disabled = true;
-  showStatus("Uploading audio, extracting the profile, and saving it…", "");
+  showStatus("Uploading audio, extracting the profile and validating it…", "");
   try {
     const form = new FormData();
     form.append("audio", file);
-    const response = await fetch("/api/profiles/audio", {method: "POST", body: form});
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "The request failed.");
-    renderProfile(result.profile);
-    showStatus(result.message, "success");
-    await loadSavedProfiles();
+    const data = await requestJson("/api/profiles/audio/extract", {method: "POST", body: form});
+    renderPreview(data.preview, data.validation, data.source, null);
+    showStatus(data.message, "success");
   } catch (error) {
     showStatus(error.message || "Something went wrong. Please try again.", "error");
   } finally {
@@ -384,7 +553,7 @@ setTool("skill-gap");
     const health = await (await fetch("/api/health")).json();
     pill.classList.add(health.ai_configured ? "ok" : "warn");
     text.textContent = health.ai_configured ? "AI ready" : "AI key missing";
-    pill.title = health.ai_configured ? "Gemini API key detected" : "Add GEMINI_API_KEY to .env and restart the server";
+    pill.title = health.ai_configured ? "Groq API key detected" : "Add GROQ_API_KEY to .env and restart the server";
   } catch {
     pill.classList.add("warn");
     text.textContent = "Server unreachable";

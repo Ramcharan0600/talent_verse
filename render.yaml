@@ -5,9 +5,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
-      - key: GEMINI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
       - key: DATABASE_PATH
         value: /tmp/talentverse.db
