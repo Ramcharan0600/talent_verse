@@ -393,6 +393,29 @@ audioBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------------------------------------------------------------- PDF intake
+const pdfFile = document.getElementById("pdfFile");
+const pdfBtn = document.getElementById("pdfBtn");
+
+pdfBtn.addEventListener("click", async () => {
+  const file = pdfFile.files[0];
+  if (!file) { showStatus("Choose a PDF file first.", "error"); return; }
+  if (file.size > 8 * 1024 * 1024) { showStatus("PDF is too large. Keep it under 8 MB.", "error"); return; }
+  pdfBtn.disabled = true;
+  showStatus("Reading the PDF, extracting the profile and validating it…", "");
+  try {
+    const form = new FormData();
+    form.append("pdf", file);
+    const data = await requestJson("/api/profiles/pdf/extract", {method: "POST", body: form});
+    renderPreview(data.preview, data.validation, data.source, null);
+    showStatus(data.message, "success");
+  } catch (error) {
+    showStatus(error.message || "Something went wrong. Please try again.", "error");
+  } finally {
+    pdfBtn.disabled = false;
+  }
+});
+
 // ---------------------------------------------------------------- career tools
 const TOOLS = {
   "skill-gap": {field: "career_goal", label: "YOUR CAREER GOAL", placeholder: "e.g. Become a machine learning engineer at a product company within 12 months.", button: "Build skill-gap map", render: renderSkillGap},

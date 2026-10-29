@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import re
@@ -9,6 +10,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
+from pypdf import PdfReader
 
 load_dotenv()
 
@@ -567,7 +569,8 @@ def health():
 
 
 def _source_label(source):
-    return "[audio introduction: raw input not stored]" if source == "audio" else "[pasted text: raw input not stored]"
+    labels = {"audio": "[audio introduction", "pdf": "[uploaded PDF"}
+    return f"{labels.get(source, '[pasted text')}: raw input not stored]"
 
 
 @app.post("/api/profiles/extract")
@@ -617,6 +620,40 @@ def preview_profile_from_audio():
         return jsonify({"error": f"Profile validation failed: {exc}"}), 422
     return jsonify({"message": "Audio profile extracted and validated. Review it, then confirm to save.",
                     "source": "audio", "preview": profile, "validation": build_report(profile)})
+
+
+@app.post("/api/profiles/pdf/extract")
+def preview_profile_from_pdf():
+    """Step 1 for PDF input: read the PDF text, then AI extraction + validation. Nothing is stored."""
+    upload = request.files.get("pdf")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "Please attach a PDF file in the 'pdf' field."}), 400
+    data = upload.read()
+    if not data:
+        return jsonify({"error": "The PDF file is empty."}), 400
+    if len(data) > MAX_AUDIO_BYTES:
+        return jsonify({"error": "PDF is too large. Please keep it under 8 MB."}), 400
+    if not data.startswith(b"%PDF"):
+        return jsonify({"error": "That file is not a valid PDF."}), 400
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if reader.is_encrypted:
+            return jsonify({"error": "This PDF is password-protected. Remove the password and try again."}), 400
+        resume_text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+    except Exception:
+        return jsonify({"error": "The PDF could not be read. Try another file or paste the text instead."}), 400
+    if len(resume_text) < 80:
+        return jsonify({"error": "No readable text was found in the PDF (scanned images are not supported). Paste the text instead."}), 400
+    resume_text = resume_text[:30000]
+    try:
+        profile = extract_profile(resume_text)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 502
+    except ValueError as exc:
+        return jsonify({"error": f"Profile validation failed: {exc}"}), 422
+    return jsonify({"message": "PDF profile extracted and validated. Review it, then confirm to save.",
+                    "source": "pdf", "preview": profile,
+                    "validation": build_report(profile, resume_text)})
 
 
 @app.post("/api/profiles")
